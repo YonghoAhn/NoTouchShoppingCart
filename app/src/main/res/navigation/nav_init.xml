@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_init"
+    app:startDestination="@id/searchCartFragment">
+
+    <fragment
+        android:id="@+id/cartListFragment"
+        android:name="moe.misakachan.notouchshoppingcart.Fragment.CartListFragment"
+        android:label="fragment_cart_list"
+        tools:layout="@layout/fragment_cart_list" />
+    <fragment
+        android:id="@+id/searchCartFragment"
+        android:name="moe.misakachan.notouchshoppingcart.Fragment.SearchCartFragment"
+        android:label="fragment_search_cart"
+        tools:layout="@layout/fragment_search_cart" />
+    <fragment
+        android:id="@+id/connetCartFragment"
+        android:name="moe.misakachan.notouchshoppingcart.Fragment.ConnetCartFragment"
+        android:label="fragment_connet_cart"
+        tools:layout="@layout/fragment_connet_cart" />
+</navigation>
