@@ -7,4 +7,6 @@
     <string name="find_cart">FIND CART</string>
     <string name="cart_image">Cart Image</string>
     <string name="_000_000">000 / 000</string>
+    <string name="str_continue">Continue</string>
+    <string name="cancel">Cancel</string>
 </resources>

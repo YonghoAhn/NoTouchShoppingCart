@@ -9,12 +9,20 @@
         android:id="@+id/cartListFragment"
         android:name="moe.misakachan.notouchshoppingcart.Fragment.CartListFragment"
         android:label="fragment_cart_list"
-        tools:layout="@layout/fragment_cart_list" />
+        tools:layout="@layout/fragment_cart_list" >
+        <action
+            android:id="@+id/action_cartListFragment_to_connetCartFragment"
+            app:destination="@id/connetCartFragment" />
+    </fragment>
     <fragment
         android:id="@+id/searchCartFragment"
         android:name="moe.misakachan.notouchshoppingcart.Fragment.SearchCartFragment"
         android:label="fragment_search_cart"
-        tools:layout="@layout/fragment_search_cart" />
+        tools:layout="@layout/fragment_search_cart" >
+        <action
+            android:id="@+id/action_searchCartFragment_to_cartListFragment"
+            app:destination="@id/cartListFragment" />
+    </fragment>
     <fragment
         android:id="@+id/connetCartFragment"
         android:name="moe.misakachan.notouchshoppingcart.Fragment.ConnetCartFragment"
