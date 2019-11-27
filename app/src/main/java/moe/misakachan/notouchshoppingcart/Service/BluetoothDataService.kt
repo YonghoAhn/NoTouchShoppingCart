@@ -1,15 +1,24 @@
 package moe.misakachan.notouchshoppingcart.Service
 
+import android.R
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Message
 import android.util.Log
+import android.widget.RemoteViews
+import androidx.core.app.NotificationCompat
+import moe.misakachan.notouchshoppingcart.MainActivity
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -81,10 +90,10 @@ class BluetoothDataService : Service() {
                 )
                 try {
                     val device =
-                        btAdapter!!.getRemoteDevice(MAC_ADDRESS)
+                        btAdapter!!.getRemoteDevice(macAddress)
                     Log.d(
                         "DEBUG BT",
-                        "ATTEMPTING TO CONNECT TO REMOTE DEVICE : $MAC_ADDRESS"
+                        "ATTEMPTING TO CONNECT TO REMOTE DEVICE : $macAddress"
                     )
                     mConnectingThread = ConnectingThread(device)
                     mConnectingThread!!.start()
@@ -152,7 +161,7 @@ class BluetoothDataService : Service() {
             Log.d("DEBUG BT", "IN CONNECTING THREAD")
             mmDevice = device
             var temp: BluetoothSocket? = null
-            Log.d("DEBUG BT", "MAC ADDRESS : $MAC_ADDRESS")
+            Log.d("DEBUG BT", "MAC ADDRESS : $macAddress")
             Log.d("DEBUG BT", "BT UUID : $BTMODULEUUID")
             try {
                 temp =
@@ -234,10 +243,39 @@ class BluetoothDataService : Service() {
         }
     }
 
+    fun startForegroundService() {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0)
+        val remoteViews = RemoteViews(packageName, R.layout.notification_service)
+        val builder: NotificationCompat.Builder
+        if (Build.VERSION.SDK_INT >= 26) {
+            val CHANNEL_ID = "snwodeer_service_channel"
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "SnowDeer Service Channel",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(channel)
+            builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        } else {
+            builder = NotificationCompat.Builder(this)
+        }
+        builder.setSmallIcon(R.mipmap.sym_def_app_icon)
+            .setContent(remoteViews)
+            .setContentIntent(pendingIntent)
+        startForeground(1, builder.build())
+    }
+
     companion object {
         // SPP UUID service - this should work for most devices
         private val BTMODULEUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-        // String for MAC address
-        private const val MAC_ADDRESS = "YOUR:MAC:ADDRESS:HERE"
     }
+
+    // String for MAC address
+    private var macAddress = "YOUR:MAC:ADDRESS:HERE"
+        get() = field
+        set(value) {
+            field = value
+        }
 }
