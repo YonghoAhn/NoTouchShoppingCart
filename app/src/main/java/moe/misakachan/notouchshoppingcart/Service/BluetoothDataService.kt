@@ -1,6 +1,6 @@
 package moe.misakachan.notouchshoppingcart.Service
 
-import android.R
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,23 +9,37 @@ import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.os.Handler
-import android.os.IBinder
-import android.os.Message
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.Sensor.TYPE_STEP_DETECTOR
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.*
 import android.util.Log
-import android.widget.RemoteViews
+import androidx.annotation.BoolRes
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import moe.misakachan.notouchshoppingcart.MainActivity
+import moe.misakachan.notouchshoppingcart.R
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.*
+import kotlin.math.acos
+import kotlin.math.cos
+import kotlin.math.sin
 
 
-class BluetoothDataService : Service() {
+class BluetoothDataService : Service(), SensorEventListener, LocationListener{
     val handlerState = 0 //used to identify handler message
     var bluetoothIn: Handler? = null
     private var btAdapter: BluetoothAdapter? = null
@@ -33,14 +47,83 @@ class BluetoothDataService : Service() {
     private var mConnectedThread: ConnectedThread? = null
     private var stopThread = false
     private val recDataString = StringBuilder()
+    private var macAddress = "YOUR:MAC:ADDRESS:HERE"
+    private val mBinder: IBinder = BluetoothDataServiceBinder()
+
+    private var mSensorManager: SensorManager? = null
+    private var mAccelerometer: Sensor? = null
+    private var mMagnetometer: Sensor? = null
+    private val mLastAccelerometer = FloatArray(3)
+    private val mLastMagnetometer = FloatArray(3)
+    private var mLastAccelerometerSet = false
+    private var mLastMagnetometerSet = false
+    private val mR = FloatArray(9)
+    private val mOrientation = FloatArray(3)
+    private var mCurrentDegree = 0f
+    private var mStep = 0
+    private var mStepDetector: Sensor? = null
+    private var isGPSEnabled = false
+    private val locationManager: LocationManager by lazy { getSystemService(Context.LOCATION_SERVICE) as LocationManager }
+    private var lastKnownLocation: Location? = null
+    private var nowKnownLocation: Location? = null
+
+    var isAutoMode = true
+    set(value) {
+        if(value)
+            registerReceiver(manualControlReceiver, IntentFilter("ACTION_MANUAL_CONTROL"))
+        else
+            unregisterReceiver(manualControlReceiver)
+        field = value
+    }
+
+    private val modeChangeReceiver = object : BroadcastReceiver(){
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val mode = intent?.getBooleanExtra("mode" ,true)
+            if (mode != null) {
+                isAutoMode = mode
+            }
+        }
+    }
+
+    private val manualControlReceiver = object :BroadcastReceiver()
+    {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            //U/D/L/R
+            val direction = intent?.getStringExtra("direction")
+            if(direction!=null && mConnectedThread!=null)
+                mConnectedThread!!.write("MOVE\n$direction\n")
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.d("BT SERVICE", "SERVICE CREATED")
         stopThread = false
+        mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        mAccelerometer = mSensorManager!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        mMagnetometer = mSensorManager!!.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+        mStepDetector = mSensorManager!!.getDefaultSensor(TYPE_STEP_DETECTOR)
+        if(mStepDetector != null)
+            Log.d("MisakaMOE", mStepDetector!!.name)
+        registerReceiver(modeChangeReceiver, IntentFilter("ACTION_CONTROL_MODE_CHANGE"))
+        //If GPS blocked, stop Service.
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0f, this)
+
+        startForegroundService()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d("BT SERVICE", "SERVICE STARTED")
+        mSensorManager!!.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL)
+        mSensorManager!!.registerListener(this, mMagnetometer, SensorManager.SENSOR_DELAY_NORMAL)
+        mSensorManager!!.registerListener(this, mStepDetector, SensorManager.SENSOR_DELAY_NORMAL)
+
+        macAddress = intent?.getStringExtra("MAC").toString()
         bluetoothIn = @SuppressLint("HandlerLeak")
         object : Handler() {
             override fun handleMessage(msg: Message) {
@@ -51,6 +134,11 @@ class BluetoothDataService : Service() {
                     recDataString.append(readMessage)
                     Log.d("RECORDED", recDataString.toString())
                     // Do stuff here with your data, like adding it to the database
+                    val localBroadcastManager =
+                        LocalBroadcastManager.getInstance(applicationContext)
+                    val msgIntent = Intent("ACTION_BT_SERIAL_RECEIVE")
+                    msgIntent.putExtra("msg", recDataString.toString())
+                    localBroadcastManager.sendBroadcast(msgIntent)
                 }
                 recDataString.delete(0, recDataString.length) //clear all string data
             }
@@ -62,7 +150,7 @@ class BluetoothDataService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        bluetoothIn!!.removeCallbacksAndMessages(null)
+        bluetoothIn?.removeCallbacksAndMessages(null)
         stopThread = true
         if (mConnectedThread != null) {
             mConnectedThread!!.closeStreams()
@@ -70,11 +158,13 @@ class BluetoothDataService : Service() {
         if (mConnectingThread != null) {
             mConnectingThread!!.closeSocket()
         }
-        Log.d("SERVICE", "onDestroy")
-    }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
+        mSensorManager!!.unregisterListener(this, mAccelerometer)
+        mSensorManager!!.unregisterListener(this, mMagnetometer)
+        mSensorManager!!.unregisterListener(this, mStepDetector)
+        locationManager.removeUpdates(this)
+        unregisterReceiver(modeChangeReceiver)
+        Log.d("SERVICE", "onDestroy")
     }
 
     //Checks that the Android device Bluetooth is available and prompts to be turned on if off
@@ -126,7 +216,7 @@ class BluetoothDataService : Service() {
                 mConnectedThread!!.start()
                 Log.d("DEBUG BT", "CONNECTED THREAD STARTED")
                 //I send a character when resuming.beginning transmission to check device is connected
-//If it is not an exception will be thrown in the write method and finish() will be called
+                //If it is not an exception will be thrown in the write method and finish() will be called
                 mConnectedThread!!.write("x")
             } catch (e: IOException) {
                 try {
@@ -243,26 +333,28 @@ class BluetoothDataService : Service() {
         }
     }
 
-    fun startForegroundService() {
+    private fun startForegroundService() {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0)
-        val remoteViews = RemoteViews(packageName, R.layout.notification_service)
         val builder: NotificationCompat.Builder
-        if (Build.VERSION.SDK_INT >= 26) {
-            val CHANNEL_ID = "snwodeer_service_channel"
+        builder = if (Build.VERSION.SDK_INT >= 26) {
+            val channelId = "NoTouchShoppingCart_Channel"
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                "SnowDeer Service Channel",
+                channelId,
+                "NoTouchShoppingCart Channel",
                 NotificationManager.IMPORTANCE_DEFAULT
             )
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .createNotificationChannel(channel)
-            builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            if(!getSharedPreferences("SETTING", Context.MODE_PRIVATE).getBoolean("isNotificationCreated",false)) {
+                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+                getSharedPreferences("SETTING", Context.MODE_PRIVATE).edit().putBoolean("isNotificationCreated",true).apply()
+            }
+            NotificationCompat.Builder(this, channelId)
         } else {
-            builder = NotificationCompat.Builder(this)
+            NotificationCompat.Builder(this)
         }
-        builder.setSmallIcon(R.mipmap.sym_def_app_icon)
-            .setContent(remoteViews)
+        builder.setSmallIcon(R.drawable.cartcircle)
+            .setContentTitle("Bluetooth Communication")
+            .setContentText("Bluetooth Connected with Cart.")
             .setContentIntent(pendingIntent)
         startForeground(1, builder.build())
     }
@@ -270,12 +362,141 @@ class BluetoothDataService : Service() {
     companion object {
         // SPP UUID service - this should work for most devices
         private val BTMODULEUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+        private fun distance(
+            lat1: Double,
+            lon1: Double,
+            lat2: Double,
+            lon2: Double
+        ): Double {
+            val theta = lon1 - lon2
+            var dist = sin(deg2rad(lat1)) * sin(deg2rad(lat2)) + cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * cos(deg2rad(theta))
+            dist = acos(dist)
+            dist = rad2deg(dist)
+            dist *= 60 * 1.1515
+            dist *= 1.609344 * 1000 //mile to meter
+            return dist
+        }
+
+        // This function converts decimal degrees to radians
+        private fun deg2rad(deg: Double): Double {
+            return deg * Math.PI / 180.0
+        }
+
+        // This function converts radians to decimal degrees
+        private fun rad2deg(rad: Double): Double {
+            return rad * 180 / Math.PI
+        }
     }
 
-    // String for MAC address
-    private var macAddress = "YOUR:MAC:ADDRESS:HERE"
-        get() = field
-        set(value) {
-            field = value
+    inner class BluetoothDataServiceBinder : Binder() {
+        fun getService(): BluetoothDataService = this@BluetoothDataService
+    }
+
+    override fun onBind(intent: Intent?): IBinder? {
+        return mBinder
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if(isAutoMode) {
+            if (event!!.sensor == mAccelerometer) {
+                Log.d("MisakaMOE", "Accel")
+                System.arraycopy(event.values, 0, mLastAccelerometer, 0, event.values.size)
+                mLastAccelerometerSet = true
+            } else if (event.sensor == mMagnetometer) {
+                Log.d("MisakaMOE", "Magneto")
+
+                System.arraycopy(event.values, 0, mLastMagnetometer, 0, event.values.size)
+                mLastMagnetometerSet = true
+            } else if (event.sensor.type == TYPE_STEP_DETECTOR) {
+                Log.d("MisakaMOE", "STEP")
+
+                if (event.values[0] == 1.0f) {
+                    //call GPS Code
+                    if (GPSLocation > 0.03) {
+                        mStep++
+
+                        mConnectedThread?.write("STEP\n")
+                        mConnectedThread?.write(mStep.toString()+"\n")
+                        mConnectedThread?.write("ANGLE\n")
+                        mConnectedThread?.write(mCurrentDegree.toString()+"\n")
+
+                        val localBroadcastManager =
+                            LocalBroadcastManager.getInstance(applicationContext)
+                        val msgIntent = Intent("ACTION_STEP_DETECTED")
+                        msgIntent.putExtra("step", mStep)
+                        localBroadcastManager.sendBroadcast(msgIntent)
+                    }
+                }
+            }
+
+            if (mLastAccelerometerSet && mLastMagnetometerSet) {
+                SensorManager.getRotationMatrix(mR, null, mLastAccelerometer, mLastMagnetometer)
+                val azimuthDegrees = (Math.toDegrees(
+                    SensorManager.getOrientation(mR, mOrientation)[0].toDouble()
+                ) + 360).toInt() % 360.toFloat()
+                mCurrentDegree = -azimuthDegrees
+
+                //mConnectedThread?.write("ANGLE")
+                //mConnectedThread?.write(mCurrentDegree.toString())
+                val localBroadcastManager = LocalBroadcastManager.getInstance(applicationContext)
+                val msgIntent = Intent("ACTION_AZIMUTH_CHANGED")
+                msgIntent.putExtra("azimuth", mCurrentDegree)
+                val stepIntent = Intent("ACTION_STEP_DETECTED").putExtra("step",mStep)
+                localBroadcastManager.sendBroadcast(msgIntent)
+                localBroadcastManager.sendBroadcast(stepIntent)
+            }
+       }
+    }
+
+    private val GPSLocation : Double
+        get() {
+            var dTime = 0.0
+            var dDist = 0.0
+            if(isGPSEnabled)
+            {
+                if(lastKnownLocation == null)
+                    lastKnownLocation = nowKnownLocation
+                if(lastKnownLocation != null && nowKnownLocation != null)
+                {
+                    val lat1 = lastKnownLocation!!.latitude
+                    val lng1 = lastKnownLocation!!.longitude
+                    val lat2 = nowKnownLocation!!.latitude
+                    val lng2 = nowKnownLocation!!.longitude
+                    dTime = (nowKnownLocation!!.time - lastKnownLocation!!.time) / 1000.0
+                    dDist = distance(lat1,lng1,lat2,lng2)
+                    if(dDist > 0.03)
+                    {
+                        lastKnownLocation = nowKnownLocation
+                        return dDist
+                    }
+                }
+            }
+            return 0.0
         }
+
+    override fun onLocationChanged(location: Location?) {
+        nowKnownLocation = location
+        val lng = location?.longitude
+        val lat = location?.latitude
+    }
+
+
+    override fun onProviderEnabled(provider: String?) {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        // 위치정보 업데이트
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0f, this)
+    }
+
+    override fun onProviderDisabled(provider: String?) {}
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+
 }

@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.fragment.app.Fragment
@@ -28,6 +29,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import kotlinx.android.synthetic.main.fragment_cart_list.*
 
 import moe.misakachan.notouchshoppingcart.R
+import java.lang.Exception
 
 /**
  * A simple [Fragment] subclass.
@@ -36,6 +38,7 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
     private val mBluetoothAdapter by lazy { BluetoothAdapter.getDefaultAdapter() }
     private val mArrayAdapter by lazy { ArrayAdapter<String>(context!!, R.layout.simple_list_item, R.id.textView4) }
     private val mBluetoothDevice = ArrayList<BluetoothDevice>()
+    private var mPairedDevice = ArrayList<BluetoothDevice>()
 
     override fun onPause() {
         super.onPause()
@@ -73,6 +76,10 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             ActivityCompat.requestPermissions(activity!!, arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 1001 )
         }
 
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            if(ContextCompat.checkSelfPermission(this.context!!, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED)
+                ActivityCompat.requestPermissions(activity!!, arrayOf(Manifest.permission.ACTIVITY_RECOGNITION), 1001 )
+
         if(!mBluetoothAdapter.isEnabled)
             startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),1001)
 
@@ -80,7 +87,12 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
         cartListView.adapter = mArrayAdapter
 
         cartListView.setOnItemClickListener { parent, view, position, id ->
-            findNavController().navigate(R.id.action_cartListFragment_to_connetCartFragment)
+            val device = mBluetoothDevice[position]
+            //If not paired yet, create bond first.
+            if(!mPairedDevice.contains(device))
+                device.createBond()
+            val action = CartListFragmentDirections.actionCartListFragmentToConnetCartFragment(device.name, device.address)
+            findNavController().navigate(action)
         }
     }
 
@@ -94,7 +106,12 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        activity!!.unregisterReceiver(BluetoothStateReceiver)
+        try {
+            activity!!.unregisterReceiver(BluetoothStateReceiver)
+        } catch (e:Exception)
+        {
+
+        }
     }
 
     override fun onRefresh() {
@@ -106,7 +123,13 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             Log.d("MisakaMOE", "Something went wrong while starting discovery")
     }
 
-    val BluetoothStateReceiver = object : BroadcastReceiver() {
+    fun getBondedDevices()
+    {
+        mPairedDevice = ArrayList(mBluetoothAdapter.bondedDevices)
+        mBluetoothDevice.addAll(mPairedDevice)
+    }
+
+    private val BluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val action : String = intent!!.action!!
 
@@ -125,6 +148,7 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             else if(BluetoothAdapter.ACTION_DISCOVERY_FINISHED == action)
             {
                 swipeCartLayout.isRefreshing = false
+                getBondedDevices()
                 Toast.makeText(context, "검색 완료", Toast.LENGTH_SHORT).show()
             }
         }

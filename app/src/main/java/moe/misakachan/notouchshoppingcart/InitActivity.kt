@@ -1,7 +1,11 @@
 package moe.misakachan.notouchshoppingcart
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.MenuItem
+import androidx.appcompat.app.AppCompatActivity
+import androidx.navigation.findNavController
+import kotlinx.android.synthetic.main.activity_init.*
+import java.util.*
 
 class InitActivity : AppCompatActivity() {
 
@@ -10,5 +14,15 @@ class InitActivity : AppCompatActivity() {
         setContentView(R.layout.activity_init)
         supportActionBar?.setDisplayShowTitleEnabled(false)
         supportActionBar?.setIcon(R.drawable.cart)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true) // 뒤로가기 버튼, 디폴트로 true만 해도 백버튼이 생김
+
+
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if(item.itemId == android.R.id.home)
+            findNavController(R.id.fragment).navigateUp()
+        return super.onOptionsItemSelected(item)
     }
 }
+

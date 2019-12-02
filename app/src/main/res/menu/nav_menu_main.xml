@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/automaticFragment"  android:title="@string/auto" android:icon="@drawable/cart" />
+    <item android:id="@+id/cartConnectionFragment" android:title="@string/connection" android:icon="@drawable/menu_pinpoint"/>
+    <item android:id="@+id/manualFragment" android:title="@string/manual" android:icon="@drawable/menu_controller" />
+</menu>

@@ -41,6 +41,24 @@
         <item name="android:fontFamily">@font/orbitron</item>
     </style>
 
+    <style name="LargeTextView" parent="Widget.AppCompat.TextView">
+        <item name="android:textColor">@color/primaryTextColor</item>
+        <item name="android:textSize">36sp</item>
+        <item name="android:fontFamily">@font/orbitron</item>
+    </style>
+
+    <style name="ExtraLargeTextView" parent="Widget.AppCompat.TextView">
+        <item name="android:textColor">@color/primaryTextColor</item>
+        <item name="android:textSize">48sp</item>
+        <item name="android:fontFamily">@font/orbitron</item>
+    </style>
+
+    <style name="DescriptionTextView" parent="Widget.AppCompat.TextView">
+        <item name="android:textColor">@color/primaryDescriptionTextColor</item>
+        <item name="android:textSize">32sp</item>
+        <item name="android:fontFamily">@font/orbitron</item>
+    </style>
+
     <style name="ContentTextView" parent="Widget.AppCompat.TextView">
         <item name="android:textColor">@color/primaryTextColor</item>
         <item name="android:textSize">18sp</item>

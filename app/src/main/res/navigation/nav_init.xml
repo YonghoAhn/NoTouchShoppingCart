@@ -27,5 +27,12 @@
         android:id="@+id/connetCartFragment"
         android:name="moe.misakachan.notouchshoppingcart.Fragment.ConnetCartFragment"
         android:label="fragment_connet_cart"
-        tools:layout="@layout/fragment_connet_cart" />
+        tools:layout="@layout/fragment_connet_cart" >
+        <argument
+            android:name="DeviceName"
+            app:argType="string" />
+        <argument
+            android:name="DeviceAddress"
+            app:argType="string" />
+    </fragment>
 </navigation>

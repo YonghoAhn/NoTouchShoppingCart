@@ -8,4 +8,6 @@
     <color name="primaryLightColor">#595959</color>
     <color name="primaryDarkColor">#212121</color>
     <color name="primaryTextColor">#ffffff</color>
+    <color name="primaryDescriptionTextColor">#88ffffff</color>
+
 </resources>
