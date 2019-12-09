@@ -68,13 +68,6 @@ class BluetoothDataService : Service(), SensorEventListener, LocationListener{
     private var nowKnownLocation: Location? = null
 
     var isAutoMode = true
-    set(value) {
-        if(value)
-            registerReceiver(manualControlReceiver, IntentFilter("ACTION_MANUAL_CONTROL"))
-        else
-            unregisterReceiver(manualControlReceiver)
-        field = value
-    }
 
     private val modeChangeReceiver = object : BroadcastReceiver(){
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -85,11 +78,21 @@ class BluetoothDataService : Service(), SensorEventListener, LocationListener{
         }
     }
 
+    fun sendManualControl(direction: String)
+    {
+        Log.d("MisakaMOE", "BT MOVE SIGNAL SEND")
+        mConnectedThread?.write("MOVE\n$direction\n")
+    }
+
+
+
     private val manualControlReceiver = object :BroadcastReceiver()
     {
         override fun onReceive(context: Context?, intent: Intent?) {
             //U/D/L/R
+            Log.d("MisakaMOE", "MOVE Received")
             val direction = intent?.getStringExtra("direction")
+            Log.d("MisakaMOE", direction)
             if(direction!=null && mConnectedThread!=null)
                 mConnectedThread!!.write("MOVE\n$direction\n")
         }
@@ -106,6 +109,8 @@ class BluetoothDataService : Service(), SensorEventListener, LocationListener{
         if(mStepDetector != null)
             Log.d("MisakaMOE", mStepDetector!!.name)
         registerReceiver(modeChangeReceiver, IntentFilter("ACTION_CONTROL_MODE_CHANGE"))
+        registerReceiver(manualControlReceiver, IntentFilter("ACTION_MANUAL_CONTROL"))
+
         //If GPS blocked, stop Service.
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
@@ -137,7 +142,7 @@ class BluetoothDataService : Service(), SensorEventListener, LocationListener{
                     val localBroadcastManager =
                         LocalBroadcastManager.getInstance(applicationContext)
                     val msgIntent = Intent("ACTION_BT_SERIAL_RECEIVE")
-                    msgIntent.putExtra("msg", recDataString.toString())
+                    msgIntent.putExtra("direction", recDataString.toString())
                     localBroadcastManager.sendBroadcast(msgIntent)
                 }
                 recDataString.delete(0, recDataString.length) //clear all string data
@@ -164,6 +169,7 @@ class BluetoothDataService : Service(), SensorEventListener, LocationListener{
         mSensorManager!!.unregisterListener(this, mStepDetector)
         locationManager.removeUpdates(this)
         unregisterReceiver(modeChangeReceiver)
+        unregisterReceiver(manualControlReceiver)
         Log.d("SERVICE", "onDestroy")
     }
 
@@ -414,8 +420,9 @@ class BluetoothDataService : Service(), SensorEventListener, LocationListener{
                 Log.d("MisakaMOE", "STEP")
 
                 if (event.values[0] == 1.0f) {
+
                     //call GPS Code
-                    if (GPSLocation > 0.03) {
+                    //if (GPSLocation > 0.01) {
                         mStep++
 
                         mConnectedThread?.write("STEP\n")
@@ -428,7 +435,7 @@ class BluetoothDataService : Service(), SensorEventListener, LocationListener{
                         val msgIntent = Intent("ACTION_STEP_DETECTED")
                         msgIntent.putExtra("step", mStep)
                         localBroadcastManager.sendBroadcast(msgIntent)
-                    }
+                   // }
                 }
             }
 

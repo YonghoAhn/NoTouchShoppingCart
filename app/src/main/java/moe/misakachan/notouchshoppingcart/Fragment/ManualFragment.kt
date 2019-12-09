@@ -1,8 +1,13 @@
 package moe.misakachan.notouchshoppingcart.Fragment
 
 
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.os.Bundle
+import android.os.IBinder
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -12,25 +17,55 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.android.synthetic.main.fragment_manual.*
 
 import moe.misakachan.notouchshoppingcart.R
+import moe.misakachan.notouchshoppingcart.Service.BluetoothDataService
 
 /**
  * A simple [Fragment] subclass.
  */
-class ManualFragment : Fragment() , View.OnClickListener{
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        super.onActivityCreated(savedInstanceState)
+class ManualFragment : Fragment(){
 
-        switch1.setOnCheckedChangeListener { _, isChecked ->
-            val localBroadcastManager = LocalBroadcastManager.getInstance(context!!)
-            val msgIntent = Intent("ACTION_CONTROL_MODE_CHANGE")
-            msgIntent.putExtra("mode", isChecked)
-            localBroadcastManager.sendBroadcast(msgIntent)
+    private lateinit var mService: BluetoothDataService
+    private var mBound: Boolean = false
+
+    /** Defines callbacks for service binding, passed to bindService()  */
+    private val connection = object : ServiceConnection {
+
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            // We've bound to LocalService, cast the IBinder and get LocalService instance
+            val binder = service as BluetoothDataService.BluetoothDataServiceBinder
+            mService = binder.getService()
+            mBound = true
         }
 
-        imgUp.setOnClickListener(this)
-        imgDown.setOnClickListener(this)
-        imgLeft.setOnClickListener(this)
-        imgRight.setOnClickListener(this)
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            mBound = false
+        }
+    }
+
+    override fun onActivityCreated(savedInstanceState: Bundle?) {
+        super.onActivityCreated(savedInstanceState)
+        val localBroadcastManager = LocalBroadcastManager.getInstance(context!!)
+        Intent(context!!, BluetoothDataService::class.java).also { intent ->
+            activity!!.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+        switch1.setOnCheckedChangeListener { _, isChecked ->
+            mService.isAutoMode = isChecked
+        }
+        imgUp.setOnClickListener{
+            mService.sendManualControl("U")
+        }
+        imgDown.setOnClickListener{
+            mService.sendManualControl("D")
+        }
+        imgLeft.setOnClickListener{
+            mService.sendManualControl("L")
+        }
+        imgRight.setOnClickListener{
+            mService.sendManualControl("R")
+        }
+        btnStop.setOnClickListener{
+            mService.sendManualControl("S")
+        }
     }
 
     override fun onCreateView(
@@ -41,21 +76,9 @@ class ManualFragment : Fragment() , View.OnClickListener{
         return inflater.inflate(R.layout.fragment_manual, container, false)
     }
 
-    override fun onClick(v: View?) {
-        if(switch1.isChecked) {
-            val localBroadcastManager = LocalBroadcastManager.getInstance(context!!)
-            val msgIntent = Intent("ACTION_MANUAL_CONTROL")
-            var direction = ""
-            when (v?.id) {
-                R.id.imgUp -> direction = "U"
-                R.id.imgDown -> direction = "D"
-                R.id.imgLeft -> direction = "L"
-                R.id.imgRight -> direction = "R"
-            }
-            msgIntent.putExtra("direction", direction)
-            localBroadcastManager.sendBroadcast(msgIntent)
-        }
+    override fun onStop() {
+        super.onStop()
+        activity!!.unbindService(connection)
+        mBound = false
     }
-
-
 }

@@ -37,9 +37,10 @@ class MainActivity : AppCompatActivity() {
             } else {
                 NotificationCompat.Builder(applicationContext)
             }
+            val direction = intent?.getStringExtra("direction")
             builder.setSmallIcon(R.drawable.cartcircle)
                 .setContentTitle("Manual operation is required.")
-                .setContentText("The route was blocked by something.")
+                .setContentText("The $direction route was blocked by something.")
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(0, builder.build())
         }
     }

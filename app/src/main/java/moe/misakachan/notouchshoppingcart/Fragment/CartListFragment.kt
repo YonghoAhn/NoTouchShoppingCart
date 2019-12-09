@@ -86,7 +86,7 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
         swipeCartLayout.setOnRefreshListener(this)
         cartListView.adapter = mArrayAdapter
 
-        cartListView.setOnItemClickListener { parent, view, position, id ->
+        cartListView.setOnItemClickListener { _, _, position, _ ->
             val device = mBluetoothDevice[position]
             //If not paired yet, create bond first.
             if(!mPairedDevice.contains(device))
@@ -137,11 +137,16 @@ class CartListFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             if (BluetoothDevice.ACTION_FOUND == action)
             {
                 val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                if(device != null && device.name != null) {
-                    if(!mBluetoothDevice.contains(device)) {
-                        mBluetoothDevice.add(device)
-                        mArrayAdapter.add(device.name.toString())
-                        mArrayAdapter.notifyDataSetChanged()
+                if(device != null && device.name != null)
+                {
+                    if(!mBluetoothDevice.contains(device))
+                    {
+                        //if(device.name.startsWith("Cart", true))
+                        //{
+                            mBluetoothDevice.add(device)
+                            mArrayAdapter.add(device.name.toString())
+                            mArrayAdapter.notifyDataSetChanged()
+                        //}
                     }
                 }
             }

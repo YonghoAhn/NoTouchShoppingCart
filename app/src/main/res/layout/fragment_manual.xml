@@ -77,4 +77,14 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/imgDown" />
 
+    <Button
+        android:id="@+id/btnStop"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="stop"
+        app:layout_constraintBottom_toTopOf="@+id/imgDown"
+        app:layout_constraintEnd_toStartOf="@+id/imgRight"
+        app:layout_constraintStart_toEndOf="@+id/imgLeft"
+        app:layout_constraintTop_toBottomOf="@+id/imgUp" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
